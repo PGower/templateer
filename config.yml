@@ -1,0 +1,4 @@
+
+config_file:
+  template: /path/to/template.ext
+  target: /path/to/destination.oext

@@ -4,16 +4,39 @@ import os
 import yaml
 
 @click.command()
-@click.option('--config', '-c', help="Location of the config file. Defaults to ./config.yml")
-@click.option('--skip-empty|--no-skip-empty', help="When set any template that produces an all whitepace result will not be output to the destination.")
-@click.option('--data-source', help="Reserved for future expansion. Currently has one possible value, environ.")
-def generate():
-	load config from --config or ./config.yml
-	if no config print an error message and fail.
+@click.option('--config', '-c', type=click.File(mode='r'), default='./config.yml', help="Location of the config file. Defaults to ./config.yml")
+@click.option('--skip-empty/--no-skip-empty', help="When set any template that produces an all whitepace result will not be output to the destination.")
+# @click.option('--data-source', default='env', type=click.Choice(['env']), help="Reserved for future expansion. Currently has one possible value, environ.")
+def generate(config, skip_empty, data_source):
+	try:
+		config = yaml.loads(config)
+	except (yaml.scanner.ScannerError, IOError) as e:
+		click.secho('An error occured and we were unable to load the config file at {}'.format(config.name), fg='red')
+		click.secho('The error message was: {}'.format(str(e)), fg='red')
+	if not config.has_key('templates'):
+		click.secho('The config file does not have a templates key. This is required.', fg='red')
+		raise click.Abort('Invalid config file.')
+	else:
+		for template_id, template_config in config['templates'].items():
+			click.secho('Processing template with ID: {}'.format(template_id))
+			template = jinja2.Template(open(template_config['src']))
+			content = src.render(os.environ)
+			if skip_empty and content.strip():
+				click.secho('Not writing template with ID: {} as the output is empty.')
+				continue
+			with open(template_config['dest'], 'w+') as f:
+				f.write(content)
+				click.secho('Writing content for template ID: {} to {}'.format(template_id, template_config['dest']))
+			uid = template_config.get('uid', -1)
+			gid = template_config.get('gid', -1)
+			os.chown(template_config['dest'], uid, gid)
+			click.secho('Setting uid and gid on destination file to {}:{}'.format(uid, gid))
+			if template_config.has_key('mode'):
+				os.lchmod(template_config['dest'], template_config['mode'])
+				click.secho('Setting file mode to {}'.format(template_config['mode']))
 
-	for each entry in the config file render the template entry to the output entry using os.environ as the context.
-	if skip empty is true then any template file that results in an empty file (all whitespace) is logged and then skipped.
+
 
 
 if __name__ == '__main__':
-	tool()
+	generate()
